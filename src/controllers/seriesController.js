@@ -1,9 +1,14 @@
 const { Serie } = require('../models/series.model')
+const { client } = require('../db/redisClient')
+
+const KEY_ALL = 'series:all'
+const keyOne = (id) => `series:${id}`
 
 const crearSerie = async (req, res) => {
     try {
         const serie = new Serie(req.body)
         const guardado = await serie.save()
+        await client.del(KEY_ALL)
         res.status(201).json(guardado)
     } catch (error) {
         res.status(500).json({ message: 'Error al crear la serie' })
@@ -12,7 +17,14 @@ const crearSerie = async (req, res) => {
 
 const obtenerSeries = async (req, res) => {
     try {
-        const series = await Serie.find()
+        const cached = await client.get(KEY_ALL)
+        if(cached){
+          console.log('Cache hit')
+          return res.status(200).json(JSON.parse(cached))
+        }
+        console.log('Cache miss -> Consultando a MongoDB')
+        const series = await Serie.find().populate('productora', 'nombre pais -_id')
+        await client.set(KEY_ALL, JSON.stringify(series), { EX: 60 })
         res.status(200).json(series)
     } catch (error) {
         res.status(500).json({ message: 'Error al obtener las series' })
@@ -22,8 +34,16 @@ const obtenerSeries = async (req, res) => {
 const obtenerSerie = async (req, res) => {
     try {
         const id = req.params.id
-        const serie = await Serie.findById(id)
+        const key = keyOne(id)
+        const cached = await client.get(key)
+        if(cached){
+          console.log(`Cache hit [${id}]`)
+          return res.status(200).json(JSON.parse(cached))
+        }
+        console.log(`Cache miss [${id}] -> Consultando a MongoDB`)
+        const serie = await Serie.findById(id).populate('productora', 'nombre -_id')
         if(!serie) return res.status(404).json({ message: 'La serie no existe' })
+        await client.set(key, JSON.stringify(serie), { EX: 60 })
         res.status(200).json(serie)
     } catch (error) {
         res.status(500).json({ message: 'Error al obtener la serie' })
@@ -33,8 +53,11 @@ const obtenerSerie = async (req, res) => {
 const actualizarSerie = async (req, res) => {
     try {
         const id = req.params.id
+        const key = keyOne(id)
         const serie = await Serie.findByIdAndUpdate(id, req.body)
         if(!serie) return res.status(404).json({ message: 'La serie no existe' })
+        await client.del(KEY_ALL)
+        await client.del(key)
         res.status(200).json(serie)
     } catch (error) {
         res.status(500).json({ message: 'Error al actualizar la serie' })
@@ -44,8 +67,11 @@ const actualizarSerie = async (req, res) => {
 const eliminarSerie = async (req, res) => {
     try {
         const id = req.params.id
+        const key = keyOne(id)
         const eliminada = await Serie.findByIdAndDelete(id)
         if(!eliminada) return res.status(404).json({ message: 'La serie no existe' })
+        await client.del(KEY_ALL)
+        await client.del(key)
         res.status(200).json({ message: eliminada })
     } catch (error) {
         res.status(500).json({ message: 'Error al eliminar la serie' })

@@ -8,7 +8,8 @@ const temporadaSchema = new mongoose.Schema({
 const serieSchema = new mongoose.Schema({
     nombre: { type: String, required: true },
     estado: { type: String, enum: ['En emisión', 'Finalizada', 'Cancelada'], default: 'En emisión' },
-    temporadas: [temporadaSchema]
+    temporadas: [temporadaSchema],
+    productora: { type: mongoose.Schema.Types.ObjectId, ref: 'Productora', required: true },
 }, {
     strict: true,
     toJSON: {

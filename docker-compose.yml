@@ -11,5 +11,21 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: admin123
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--requirepass", "redis123"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped  
+
 volumes:
   mongo_data:
+  redis_data:
